@@ -1,0 +1,33 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# Secrets — asla commit'leme
+.env
+
+# IDE / Editör
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Telegram oturum dosyaları
+*.session
+*.session-journal
+
+# Büyük veri dosyaları (backend/data içindeki içerikler .gitignore ile yönetiliyor)
+
+# Claude Code — yerel ayarlar commit'lenmez
+.claude/settings.local.json
+

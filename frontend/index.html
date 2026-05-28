@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ELBIS — Ukraine Conflict Monitor</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:            #050912;
+      --panel:         #07090f;
+      --panel-2:       #0a0d18;
+      --panel-hover:   #0d1120;
+      --border:        #121824;
+      --border-2:      #1a2436;
+      --text-1:        #e1e8f5;
+      --text-2:        #7a8fa8;
+      --text-3:        #374459;
+      --mono:          'JetBrains Mono', monospace;
+      --sans:          'Inter', sans-serif;
+
+      --red:           #f43f5e;
+      --red-bg:        rgba(244,63,94,.1);
+      --red-border:    rgba(244,63,94,.25);
+      --amber:         #f59e0b;
+      --amber-bg:      rgba(245,158,11,.1);
+      --amber-border:  rgba(245,158,11,.25);
+      --blue:          #3b82f6;
+      --blue-bg:       rgba(59,130,246,.1);
+      --blue-border:   rgba(59,130,246,.25);
+      --purple:        #a855f7;
+      --purple-bg:     rgba(168,85,247,.1);
+      --purple-border: rgba(168,85,247,.25);
+      --cyan:          #06b6d4;
+      --cyan-bg:       rgba(6,182,212,.1);
+      --cyan-border:   rgba(6,182,212,.25);
+      --green:         #10b981;
+      --green-bg:      rgba(16,185,129,.1);
+      --green-border:  rgba(16,185,129,.25);
+
+      --shadow:        0 0 0 1px rgba(255,255,255,.04);
+      --glow-red:      0 0 20px rgba(244,63,94,.3);
+      --glow-cyan:     0 0 20px rgba(6,182,212,.2);
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      overflow: hidden;
+      font-family: var(--sans);
+      color: var(--text-1);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ════════════════════════════════════
+       LAYOUT
+    ════════════════════════════════════ */
+    #app {
+      display: grid;
+      grid-template-rows: 56px 1fr 32px;
+      height: 100vh;
+    }
+    #body {
+      display: grid;
+      grid-template-columns: 300px 1fr 272px;
+      overflow: hidden;
+    }
+
+    /* ════════════════════════════════════
+       LOADING SCREEN
+    ════════════════════════════════════ */
+    #loading {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      z-index: 999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 24px;
+      transition: opacity .5s ease, visibility .5s ease;
+    }
+    #loading.done { opacity: 0; visibility: hidden; pointer-events: none; }
+    .ld-logo {
+      font-family: var(--mono);
+      font-size: 28px;
+      font-weight: 500;
+      letter-spacing: 10px;
+      color: var(--text-1);
+    }
+    .ld-logo em { color: var(--red); font-style: normal; }
+    .ld-track {
+      width: 220px; height: 2px;
+      background: var(--border-2);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .ld-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--red), var(--cyan));
+      border-radius: 1px;
+      animation: ldbar 1.6s cubic-bezier(.4,0,.2,1) forwards;
+    }
+    @keyframes ldbar { from { width: 0; } to { width: 100%; } }
+    .ld-text {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--text-3);
+    }
+
+    /* ════════════════════════════════════
+       HEADER
+    ════════════════════════════════════ */
+    #header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border-2);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      position: relative;
+      z-index: 200;
+      gap: 0;
+    }
+    /* accent line top */
+    #header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--red) 0%, var(--cyan) 50%, transparent 100%);
+    }
+
+    .h-logo {
+      display: flex; align-items: center; gap: 12px;
+      padding-right: 22px;
+      border-right: 1px solid var(--border-2);
+    }
+    .h-logo-mark {
+      width: 32px; height: 32px;
+      border: 1.5px solid var(--red);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--red-bg);
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .h-logo-mark::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.06) 0%, transparent 60%);
+    }
+    .h-logo-mark svg {
+      width: 16px; height: 16px;
+      stroke: var(--red);
+      fill: none;
+      stroke-width: 1.8;
+      position: relative; z-index: 1;
+    }
+    .h-logo-name {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 6px;
+      color: var(--text-1);
+    }
+
+    .h-sep { width: 1px; height: 28px; background: var(--border-2); margin: 0 20px; flex-shrink: 0; }
+
+    .h-live {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 12px;
+      background: var(--green-bg);
+      border: 1px solid var(--green-border);
+      border-radius: 4px;
+    }
+    .h-live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: livepulse 2s ease-in-out infinite;
+    }
+    @keyframes livepulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,.5); }
+      50%      { box-shadow: 0 0 0 5px rgba(16,185,129,0); }
+    }
+    .h-live-text {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      color: var(--green);
+    }
+
+    .h-region {
+      display: flex; align-items: center; gap: 10px;
+      padding-left: 20px;
+    }
+    .h-flag { font-size: 20px; line-height: 1; }
+    .h-region-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-2);
+      letter-spacing: .5px;
+    }
+    .h-region-sub {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-3);
+      letter-spacing: 2px;
+      margin-top: 2px;
+    }
+
+    .h-stats {
+      margin-left: auto;
+      display: flex;
+      align-items: stretch;
+      height: 100%;
+    }
+    .h-stat {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 0 22px;
+      border-left: 1px solid var(--border-2);
+      gap: 3px;
+    }
+    .h-stat-val {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    .h-stat-lbl {
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: 1.5px;
+      color: var(--text-3);
+    }
+
+    /* ════════════════════════════════════
+       SIDE PANELS
+    ════════════════════════════════════ */
+    .panel {
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    #left-panel  { border-right: 1px solid var(--border-2); }
+    #right-panel { border-left:  1px solid var(--border-2); }
+
+    .ph {
+      padding: 10px 14px 9px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+      background: rgba(255,255,255,.015);
+    }
+    .ph-left { display: flex; align-items: center; gap: 7px; }
+    .ph-icon { width: 15px; height: 15px; stroke: var(--text-3); fill: none; stroke-width: 1.6; flex-shrink: 0; }
+    .ph-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 2.5px;
+      color: var(--text-3);
+      text-transform: uppercase;
+    }
+    .badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: var(--border-2);
+      color: var(--text-2);
+      border: 1px solid var(--border-2);
+    }
+    .badge-new {
+      background: var(--red-bg);
+      color: var(--red);
+      border-color: var(--red-border);
+      animation: newpulse 1.5s ease-in-out 3;
+    }
+    @keyframes newpulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+    /* ── Filter tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1;
+      padding: 7px 4px;
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: 1.2px;
+      text-align: center;
+      color: var(--text-3);
+      cursor: pointer;
+      border-right: 1px solid var(--border);
+      transition: color .15s, background .15s;
+      position: relative;
+      user-select: none;
+    }
+    .tab:last-child { border-right: none; }
+    .tab:hover { color: var(--text-2); background: rgba(255,255,255,.02); }
+    .tab.on { color: var(--cyan); background: var(--cyan-bg); }
+    .tab.on::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--cyan);
+    }
+
+    /* ── Feed scrollbox ── */
+    .feed {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-2) transparent;
+    }
+    .feed::-webkit-scrollbar { width: 3px; }
+    .feed::-webkit-scrollbar-track { background: transparent; }
+    .feed::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+    /* ════════════════════════════════════
+       EVENT CARDS (left panel)
+    ════════════════════════════════════ */
+    .ec {
+      padding: 11px 14px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.035);
+      cursor: pointer;
+      transition: background .12s;
+      border-left: 3px solid transparent;
+      position: relative;
+    }
+    .ec:hover { background: rgba(255,255,255,.025); }
+    .ec.on { background: rgba(6,182,212,.05); border-left-color: var(--cyan); }
+
+    .ec.t-urgent  { border-left-color: var(--red); }
+    .ec.t-warn    { border-left-color: var(--amber); }
+    .ec.t-info    { border-left-color: var(--blue); }
+    .ec.t-intel   { border-left-color: var(--purple); }
+    .ec.t-urgent.on { background: rgba(244,63,94,.06); }
+    .ec.t-warn.on   { background: rgba(245,158,11,.06); }
+    .ec.t-info.on   { background: rgba(59,130,246,.06); }
+    .ec.t-intel.on  { background: rgba(168,85,247,.06); }
+
+    .ec-top {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 5px;
+    }
+    .ec-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ec-type {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .ec-src {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 8px;
+      color: var(--text-3);
+      background: rgba(255,255,255,.04);
+      padding: 1px 6px;
+      border-radius: 2px;
+    }
+    .ec-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-1);
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .ec-desc {
+      font-size: 10.5px;
+      color: var(--text-2);
+      line-height: 1.45;
+      margin-bottom: 6px;
+    }
+    .ec-foot {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ec-time {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-3);
+    }
+    .ec-conf {
+      font-family: var(--mono);
+      font-size: 8px;
+      padding: 1px 7px;
+      border-radius: 2px;
+    }
+    .ec-conf.H { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+    .ec-conf.M { background: var(--amber-bg);  color: var(--amber);  border: 1px solid var(--amber-border); }
+    .ec-conf.L { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+
+    /* ════════════════════════════════════
+       MAP
+    ════════════════════════════════════ */
+    #map-wrap {
+      position: relative;
+      overflow: hidden;
+      background: #040710;
+    }
+    #map {
+      position: absolute; inset: 0;
+      z-index: 1;
+    }
+
+    /* Leaflet overrides */
+    .leaflet-tile-pane { /* no filter — show natural country colours */ }
+    .leaflet-container { background: #e8e0d8 !important; }
+
+    .leaflet-control-zoom {
+      border: 1px solid var(--border-2) !important;
+      border-radius: 6px !important;
+      overflow: hidden !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,.5) !important;
+    }
+    .leaflet-control-zoom a {
+      background: var(--panel-2) !important;
+      color: var(--text-2) !important;
+      border-bottom: 1px solid var(--border) !important;
+      width: 30px !important; height: 30px !important;
+      line-height: 30px !important;
+      font-size: 16px !important;
+      transition: color .12s, background .12s !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background: var(--panel-hover) !important;
+      color: var(--cyan) !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(5,9,18,.85) !important;
+      color: var(--text-3) !important;
+      font-size: 8px !important;
+      padding: 2px 7px !important;
+      border-radius: 3px !important;
+    }
+    .leaflet-control-attribution a { color: var(--text-3) !important; }
+
+    /* Custom popup */
+    .leaflet-popup-content-wrapper {
+      background: var(--panel-2) !important;
+      border: 1px solid var(--border-2) !important;
+      border-radius: 6px !important;
+      box-shadow: 0 8px 40px rgba(0,0,0,.7), var(--shadow) !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-content { margin: 0 !important; width: auto !important; }
+    .leaflet-popup-tip { background: var(--border-2) !important; }
+    .leaflet-popup-close-button {
+      color: var(--text-3) !important;
+      font-size: 16px !important;
+      top: 8px !important; right: 9px !important;
+      width: 20px !important; height: 20px !important;
+      line-height: 20px !important;
+      text-align: center !important;
+    }
+    .leaflet-popup-close-button:hover { color: var(--text-1) !important; }
+
+    /* HUD: coords bar */
+    #coords-bar {
+      position: absolute;
+      bottom: 10px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      color: var(--text-3);
+      background: rgba(5,9,18,.8);
+      padding: 4px 12px;
+      border: 1px solid var(--border-2);
+      border-radius: 3px;
+      pointer-events: none;
+      backdrop-filter: blur(4px);
+    }
+
+    /* HUD: scan lines */
+    #scan-lines {
+      position: absolute; inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,.03) 3px,
+        rgba(0,0,0,.03) 4px
+      );
+    }
+
+    /* HUD: corner decorations */
+    .corner {
+      position: absolute; z-index: 9;
+      width: 20px; height: 20px;
+      pointer-events: none;
+    }
+    .corner-tl { top: 10px; left: 10px; border-top: 1.5px solid var(--cyan-border); border-left: 1.5px solid var(--cyan-border); }
+    .corner-tr { top: 10px; right: 10px; border-top: 1.5px solid var(--cyan-border); border-right: 1.5px solid var(--cyan-border); }
+    .corner-bl { bottom: 30px; left: 10px; border-bottom: 1.5px solid var(--cyan-border); border-left: 1.5px solid var(--cyan-border); }
+    .corner-br { bottom: 30px; right: 10px; border-bottom: 1.5px solid var(--cyan-border); border-right: 1.5px solid var(--cyan-border); }
+
+    /* ════════════════════════════════════
+       POPUP CONTENT
+    ════════════════════════════════════ */
+    .pop-wrap {
+      padding: 14px 16px 16px;
+      min-width: 220px; max-width: 270px;
+    }
+    .pop-header {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 8px;
+    }
+    .pop-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .pop-type {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .pop-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-1);
+      line-height: 1.35;
+      margin-bottom: 6px;
+    }
+    .pop-desc {
+      font-size: 11px;
+      color: var(--text-2);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+    .pop-meta {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-3);
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+    .pop-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--cyan);
+      text-decoration: none;
+      border: 1px solid var(--cyan-border);
+      padding: 5px 12px;
+      border-radius: 4px;
+      transition: background .15s;
+    }
+    .pop-link:hover { background: var(--cyan-bg); }
+
+    /* ════════════════════════════════════
+       INTEL CARDS (right panel)
+    ════════════════════════════════════ */
+    .ic {
+      padding: 11px 14px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.035);
+      cursor: pointer;
+      transition: background .12s;
+      position: relative;
+      padding-left: 16px;
+    }
+    .ic::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+    }
+    .ic.t-urgent::before { background: var(--red); }
+    .ic.t-warn::before   { background: var(--amber); }
+    .ic.t-info::before   { background: var(--blue); }
+    .ic.t-intel::before  { background: var(--purple); }
+    .ic:hover { background: rgba(255,255,255,.02); }
+    .ic.on { background: rgba(255,255,255,.03); }
+
+    .ic-head {
+      display: flex; align-items: center; gap: 5px;
+      margin-bottom: 5px;
+    }
+    .ic-type {
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .ic-new {
+      font-family: var(--mono);
+      font-size: 7px;
+      letter-spacing: 1px;
+      padding: 1px 5px;
+      border-radius: 2px;
+      background: var(--red);
+      color: #fff;
+      animation: blinknew 1.2s step-end 5;
+    }
+    @keyframes blinknew { 0%,100%{opacity:1}50%{opacity:0} }
+    .ic-ts {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 8px;
+      color: var(--text-3);
+    }
+    .ic-text {
+      font-size: 11.5px;
+      color: var(--text-1);
+      line-height: 1.45;
+      margin-bottom: 4px;
+    }
+    .ic-meta {
+      font-family: var(--mono);
+      font-size: 8.5px;
+      color: var(--text-3);
+      margin-bottom: 6px;
+    }
+    .ic-link {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--cyan);
+      text-decoration: none;
+      border: 1px solid var(--cyan-border);
+      padding: 2px 8px;
+      border-radius: 3px;
+      transition: background .12s;
+    }
+    .ic-link:hover { background: var(--cyan-bg); }
+
+    /* ════════════════════════════════════
+       FOOTER
+    ════════════════════════════════════ */
+    #footer {
+      background: var(--panel);
+      border-top: 1px solid var(--border-2);
+      display: flex; align-items: center;
+      padding: 0 16px;
+      gap: 0;
+      z-index: 200;
+    }
+    .fs {
+      padding: 0 14px;
+      border-right: 1px solid var(--border-2);
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-3);
+      letter-spacing: 1px;
+      display: flex; gap: 5px; align-items: center;
+      white-space: nowrap;
+    }
+    .fs em { font-style: normal; color: var(--text-2); }
+    .ticker-box {
+      flex: 1; overflow: hidden;
+      margin-left: 14px;
+      position: relative;
+    }
+    .ticker-box::before,
+    .ticker-box::after {
+      content: '';
+      position: absolute; top: 0; bottom: 0;
+      width: 28px; z-index: 2;
+    }
+    .ticker-box::before { left: 0;  background: linear-gradient(to right, var(--panel), transparent); }
+    .ticker-box::after  { right: 0; background: linear-gradient(to left,  var(--panel), transparent); }
+    .ticker {
+      display: flex;
+      animation: tickscroll 50s linear infinite;
+      white-space: nowrap;
+    }
+    @keyframes tickscroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .ti {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-3);
+      padding: 0 18px;
+      border-right: 1px solid var(--border-2);
+      cursor: pointer;
+      transition: color .12s;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .ti:hover { color: var(--text-2); }
+    .ti.hot { color: var(--red); }
+  </style>
+</head>
+<body>
+
+<!-- ─── LOADING OVERLAY ──────────────────────────── -->
+<div id="loading">
+  <div class="ld-logo"><em>EL</em>BIS</div>
+  <div class="ld-track"><div class="ld-bar"></div></div>
+  <div class="ld-text">OLAY VERİSİ YÜKLENİYOR</div>
+</div>
+
+<!-- ─── APP SHELL ────────────────────────────────── -->
+<div id="app">
+
+  <!-- ── HEADER ── -->
+  <header id="header">
+    <div class="h-logo">
+      <div class="h-logo-mark">
+        <svg viewBox="0 0 16 16">
+          <polygon points="8,2 14,5.5 14,10.5 8,14 2,10.5 2,5.5"/>
+          <circle cx="8" cy="8" r="2.2"/>
+        </svg>
+      </div>
+      <span class="h-logo-name">ELBIS</span>
+    </div>
+
+    <div class="h-sep"></div>
+
+    <div class="h-live">
+      <div class="h-live-dot"></div>
+      <span class="h-live-text">CANLI</span>
+    </div>
+
+    <div class="h-sep"></div>
+
+    <div class="h-region">
+      <span class="h-flag">🇺🇦</span>
+      <div>
+        <div class="h-region-name">Ukraine Conflict Monitor</div>
+        <div class="h-region-sub">GDELT · ACLED · OSINT</div>
+      </div>
+    </div>
+
+    <div class="h-stats">
+      <div class="h-stat">
+        <div class="h-stat-val" id="s-critical" style="color:var(--red)">—</div>
+        <div class="h-stat-lbl">KRİTİK</div>
+      </div>
+      <div class="h-stat">
+        <div class="h-stat-val" id="s-warn" style="color:var(--amber)">—</div>
+        <div class="h-stat-lbl">UYARI</div>
+      </div>
+      <div class="h-stat">
+        <div class="h-stat-val" id="s-total" style="color:var(--cyan)">—</div>
+        <div class="h-stat-lbl">TOPLAM</div>
+      </div>
+      <div class="h-stat">
+        <div class="h-stat-val" id="s-time" style="color:var(--text-2);font-size:13px">—</div>
+        <div class="h-stat-lbl">GÜNCELLEME</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── BODY ── -->
+  <div id="body">
+
+    <!-- LEFT: Event Feed -->
+    <div class="panel" id="left-panel">
+      <div class="ph">
+        <div class="ph-left">
+          <svg class="ph-icon" viewBox="0 0 16 16">
+            <rect x="2" y="2" width="12" height="12" rx="2"/>
+            <path d="M5 5.5h6M5 8h6M5 10.5h4"/>
+          </svg>
+          <span class="ph-label">Olay Akışı</span>
+        </div>
+        <span class="badge" id="lc">—</span>
+      </div>
+      <div class="tabs">
+        <div class="tab on"  data-f="all">TÜM</div>
+        <div class="tab"     data-f="urgent">SALDIRI</div>
+        <div class="tab"     data-f="warn">HAREKET</div>
+        <div class="tab"     data-f="intel">İSTİHBARAT</div>
+      </div>
+      <div class="feed" id="left-feed"></div>
+    </div>
+
+    <!-- CENTER: Map -->
+    <div id="map-wrap">
+      <div id="map"></div>
+      <div id="scan-lines"></div>
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+      <div id="coords-bar">—° N  —° E</div>
+    </div>
+
+    <!-- RIGHT: Intel Stream -->
+    <div class="panel" id="right-panel">
+      <div class="ph">
+        <div class="ph-left">
+          <svg class="ph-icon" viewBox="0 0 16 16">
+            <circle cx="8" cy="8" r="5.5"/>
+            <path d="M2.5 5.5C2.5 5.5 5 3 8 3s5.5 2.5 5.5 2.5"/>
+            <path d="M2 8h12"/>
+            <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+          </svg>
+          <span class="ph-label">Intel Akışı</span>
+        </div>
+        <span class="badge badge-new" id="rc">3 YENİ</span>
+      </div>
+      <div class="feed" id="right-feed"></div>
+    </div>
+
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <footer id="footer">
+    <div class="fs">KAYNAKLAR <em>GDELT · ACLED · OSINT</em></div>
+    <div class="fs">BÖLGE <em>UA — UKRAINE</em></div>
+    <div class="fs">OLAYLAR <em id="ft-total">—</em></div>
+    <div class="ticker-box">
+      <div class="ticker" id="ticker"></div>
+    </div>
+  </footer>
+
+</div><!-- #app -->
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   CONFIG
+════════════════════════════════════════════════════════════ */
+const BACKEND = 'http://localhost:8000';
+
+/* ════════════════════════════════════════════════════════════
+   LEAFLET MAP
+════════════════════════════════════════════════════════════ */
+const map = L.map('map', {
+  center: [48.8, 31.5],
+  zoom: 6,
+  zoomControl: true,
+  attributionControl: true,
+});
+
+// CartoDB Voyager — normal country colours, clean modern style
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+// Move zoom control to bottom-right
+map.zoomControl.setPosition('bottomright');
+
+// Coords on hover
+map.on('mousemove', ({ latlng }) => {
+  const la = latlng.lat.toFixed(3), lo = latlng.lng.toFixed(3);
+  document.getElementById('coords-bar').textContent =
+    la + '° N   ' + (lo > 0 ? lo + '° E' : Math.abs(lo) + '° W');
+});
+
+/* ════════════════════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════════════════════ */
+function evMeta(ev) {
+  const c = String(ev.event_code || '');
+  if (/^1[789]/.test(c))        return { cls:'urgent', color:'#f43f5e', label:'Saldırı',    icCls:'t-urgent' };
+  if (/^1[456]/.test(c))        return { cls:'warn',   color:'#f59e0b', label:'Hareket',    icCls:'t-warn'   };
+  if (/^0[123]/.test(c))        return { cls:'info',   color:'#3b82f6', label:'Diplomatik', icCls:'t-info'   };
+  if (/^1[123]/.test(c))        return { cls:'intel',  color:'#a855f7', label:'İstihbarat', icCls:'t-intel'  };
+  return                               { cls:'info',   color:'#06b6d4', label:'Olay',       icCls:'t-info'   };
+}
+
+function confOf(src) {
+  const s = (src || '').toLowerCase();
+  if (['reuters','ap news','apnews','ua mod','nato'].some(x => s.includes(x))) return 'H';
+  if (['telegram','osint','t.me','deepstate'].some(x => s.includes(x)))       return 'L';
+  return 'M';
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toISOString().slice(11,16) + ' UTC'; }
+  catch { return String(ts).slice(0,5) + ' UTC'; }
+}
+
+const confLabel = { H: 'YÜKSEK', M: 'ORTA', L: 'DÜŞÜK' };
+
+/* ════════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════════ */
+let cache       = [];
+let activeId    = null;
+let activeFilter = 'all';
+const markers   = {};   // id → L.Marker
+
+/* ════════════════════════════════════════════════════════════
+   LEAFLET MARKERS
+════════════════════════════════════════════════════════════ */
+function makeIcon(meta, active = false) {
+  const sz = active ? 22 : 14;
+  const pulse = meta.cls === 'urgent' ? `
+    <style>
+      @keyframes rp${meta.cls}{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(2.5);opacity:0}}
+      .rp-${meta.cls}-${sz}{position:absolute;inset:0;border-radius:50%;
+        border:1.5px solid ${meta.color};
+        animation:rp${meta.cls} 1.8s ease-out infinite;}
+    </style>
+    <div class="rp-${meta.cls}-${sz}"></div>` : '';
+  const glow = active ? `box-shadow:0 0 0 2px ${meta.color}40, 0 0 16px ${meta.color}50;` : '';
+  const html = `<div style="
+    width:${sz}px;height:${sz}px;border-radius:50%;
+    background:${meta.color}18;
+    border:2px solid ${meta.color};
+    ${glow}
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+  ">
+    <div style="width:${Math.round(sz*.38)}px;height:${Math.round(sz*.38)}px;
+      border-radius:50%;background:${meta.color};"></div>
+    ${pulse}
+  </div>`;
+  return L.divIcon({ html, className: '', iconSize: [sz, sz], iconAnchor: [sz/2, sz/2] });
+}
+
+function buildMarkers(evs) {
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  for (const k in markers) delete markers[k];
+
+  evs.forEach(ev => {
+    if (!ev.lat || !ev.lon) return;
+    const meta = evMeta(ev);
+    const conf = confOf(ev.src);
+    const m = L.marker([+ev.lat, +ev.lon], { icon: makeIcon(meta), riseOnHover: true });
+
+    m.bindPopup(`
+      <div class="pop-wrap">
+        <div class="pop-header">
+          <div class="pop-dot" style="background:${meta.color}"></div>
+          <span class="pop-type" style="color:${meta.color}">${meta.label.toUpperCase()}</span>
+        </div>
+        <div class="pop-title">${ev.title || ev.location || '—'}</div>
+        ${ev.description ? `<div class="pop-desc">${ev.description}</div>` : ''}
+        <div class="pop-meta">
+          ${fmtTs(ev.timestamp)} · ${(ev.src||'GDELT').toUpperCase()} · GÜVENİLİRLİK: ${conf}
+        </div>
+        ${ev.url ? `<a class="pop-link" href="${ev.url}" target="_blank" rel="noopener noreferrer">↗ Kaynağa Git</a>` : ''}
+      </div>`, { maxWidth: 300, minWidth: 220 });
+
+    m.on('click', () => activate(ev.id));
+    m.addTo(map);
+    markers[ev.id] = m;
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   LEFT FEED
+════════════════════════════════════════════════════════════ */
+function buildLeft(evs) {
+  const feed = document.getElementById('left-feed');
+  feed.innerHTML = '';
+  const filtered = activeFilter === 'all' ? evs : evs.filter(e => evMeta(e).cls === activeFilter);
+  document.getElementById('lc').textContent = filtered.length;
+
+  filtered.forEach(ev => {
+    const meta = evMeta(ev), conf = confOf(ev.src);
+    const d = document.createElement('div');
+    d.className = `ec t-${meta.cls}${ev.id === activeId ? ' on' : ''}`;
+    d.dataset.id = ev.id;
+    d.innerHTML = `
+      <div class="ec-top">
+        <div class="ec-dot" style="background:${meta.color}"></div>
+        <span class="ec-type" style="color:${meta.color}">${meta.label}</span>
+        <span class="ec-src">${(ev.src||'GDELT').toUpperCase().slice(0,14)}</span>
+      </div>
+      <div class="ec-title">${ev.title || ev.location || '—'}</div>
+      ${ev.description ? `<div class="ec-desc">${ev.description}</div>` : ''}
+      <div class="ec-foot">
+        <span class="ec-time">${fmtTs(ev.timestamp)}</span>
+        <span class="ec-conf ${conf}">${confLabel[conf]}</span>
+      </div>`;
+    d.addEventListener('click', () => activate(ev.id));
+    feed.appendChild(d);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   RIGHT FEED
+════════════════════════════════════════════════════════════ */
+function buildRight(evs) {
+  const feed = document.getElementById('right-feed');
+  feed.innerHTML = '';
+
+  evs.forEach((ev, i) => {
+    const meta = evMeta(ev);
+    const d = document.createElement('div');
+    d.className = `ic ${meta.icCls}${ev.id === activeId ? ' on' : ''}`;
+    d.dataset.id = ev.id;
+    d.innerHTML = `
+      <div class="ic-head">
+        <span class="ic-type" style="color:${meta.color}">${meta.label.toUpperCase()}</span>
+        ${i < 3 ? '<span class="ic-new">YENİ</span>' : ''}
+        <span class="ic-ts">${fmtTs(ev.timestamp)}</span>
+      </div>
+      <div class="ic-text">${ev.title || ev.description || '—'}</div>
+      <div class="ic-meta">KAYNAK: ${(ev.src||'GDELT').toUpperCase()} · GÜV: ${confOf(ev.src)}</div>
+      ${ev.url ? `<a class="ic-link" href="${ev.url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">↗ Kaynak</a>` : ''}`;
+    d.addEventListener('click', () => activate(ev.id));
+    feed.appendChild(d);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   TICKER
+════════════════════════════════════════════════════════════ */
+function buildTicker(evs) {
+  const t = document.getElementById('ticker');
+  t.innerHTML = '';
+  [...evs, ...evs].forEach(ev => {
+    const meta = evMeta(ev);
+    const s = document.createElement('span');
+    s.className = 'ti' + (meta.cls === 'urgent' ? ' hot' : '');
+    s.textContent = (meta.cls === 'urgent' ? '⚠ ' : '● ') +
+      (ev.title || ev.location || '—') + '  ·  ' + fmtTs(ev.timestamp);
+    s.addEventListener('click', () => activate(ev.id));
+    t.appendChild(s);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   STATS
+════════════════════════════════════════════════════════════ */
+function updateStats(evs) {
+  document.getElementById('s-critical').textContent = evs.filter(e => evMeta(e).cls === 'urgent').length;
+  document.getElementById('s-warn').textContent     = evs.filter(e => evMeta(e).cls === 'warn').length;
+  document.getElementById('s-total').textContent    = evs.length;
+  document.getElementById('s-time').textContent     = new Date().toISOString().slice(11, 16);
+  document.getElementById('ft-total').textContent   = evs.length;
+}
+
+/* ════════════════════════════════════════════════════════════
+   ACTIVATE EVENT
+════════════════════════════════════════════════════════════ */
+function activate(id) {
+  activeId = id;
+
+  // Cards
+  document.querySelectorAll('.ec').forEach(c => {
+    const isOn = +c.dataset.id === id;
+    c.classList.toggle('on', isOn);
+    if (isOn) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+  document.querySelectorAll('.ic').forEach(c => {
+    c.classList.toggle('on', +c.dataset.id === id);
+  });
+
+  // Markers
+  cache.forEach(ev => {
+    const m = markers[ev.id];
+    if (!m) return;
+    const meta = evMeta(ev);
+    m.setIcon(makeIcon(meta, ev.id === id));
+    if (ev.id === id) {
+      map.panTo(m.getLatLng(), { animate: true, duration: .4 });
+      setTimeout(() => m.openPopup(), 420);
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   FILTER TABS
+════════════════════════════════════════════════════════════ */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+    t.classList.add('on');
+    activeFilter = t.dataset.f;
+    buildLeft(cache);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+   RENDER — tüm UI bileşenlerini tek seferde güncelle
+════════════════════════════════════════════════════════════ */
+function render(evs) {
+  buildMarkers(evs);
+  buildLeft(evs);
+  buildRight(evs);
+  buildTicker(evs);
+  updateStats(evs);
+}
+
+/* ════════════════════════════════════════════════════════════
+   BAĞLANTI GÖSTERGESİ
+════════════════════════════════════════════════════════════ */
+function setLiveStatus(mode) {
+  // mode: 'ws' | 'polling' | 'offline'
+  const dot  = document.querySelector('.h-live-dot');
+  const txt  = document.querySelector('.h-live-text');
+  const wrap = document.querySelector('.h-live');
+  const styles = {
+    ws:      { bg: 'var(--green)',  border: 'var(--green-border)',  text: 'CANLI'      },
+    polling: { bg: 'var(--amber)',  border: 'var(--amber-border)',  text: 'POLLING'    },
+    offline: { bg: 'var(--red)',    border: 'var(--red-border)',    text: 'BAĞLANTI YOK' },
+  };
+  const s = styles[mode] || styles.offline;
+  dot.style.background           = s.bg;
+  wrap.style.borderColor         = s.border;
+  wrap.style.background          = s.border.replace('border', 'bg');
+  txt.textContent                = s.text;
+  txt.style.color                = s.bg;
+  dot.style.animationPlayState   = mode === 'offline' ? 'paused' : 'running';
+}
+
+/* ════════════════════════════════════════════════════════════
+   TOAST BİLDİRİMİ
+════════════════════════════════════════════════════════════ */
+function showToast(count, src) {
+  const t = document.createElement('div');
+  t.textContent = `+${count} yeni olay  ·  ${src || 'GDELT'}`;
+  Object.assign(t.style, {
+    position: 'fixed', bottom: '44px', right: '14px', zIndex: '999',
+    background: 'var(--panel-2)', border: '1px solid var(--cyan-border)',
+    color: 'var(--cyan)', fontFamily: 'var(--mono)', fontSize: '10px',
+    padding: '8px 14px', borderRadius: '4px', letterSpacing: '1px',
+    boxShadow: '0 4px 20px rgba(0,0,0,.5)',
+    animation: 'toastIn .2s ease',
+  });
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+/* ════════════════════════════════════════════════════════════
+   HTTP YEDEK (WebSocket çalışmazsa)
+════════════════════════════════════════════════════════════ */
+const FALLBACK = [
+  {id:0,lat:47.08,lon:33.41,event_code:'190',title:'Kherson — nehir geçidi',description:'Köprüye füze isabet raporu, teyit bekleniyor',src:'DEEPSTATE',url:'https://t.me/deepstatemap',timestamp:'2026-05-26T06:14:00Z'},
+  {id:1,lat:48.00,lon:37.80,event_code:'195',title:'Donetsk hattı — topçu atışı',description:'3 saatlik kesintisiz bombardıman',src:'MULTI-SOURCE',url:'https://liveuamap.com',timestamp:'2026-05-26T04:55:00Z'},
+  {id:2,lat:47.85,lon:35.10,event_code:'145',title:'Zaporijya — zırhlı konvoy',description:'Uydu teyitli araç hareketi',src:'ORYXSPIOENKOP',url:'https://www.oryxspioenkop.com',timestamp:'2026-05-26T05:41:00Z'},
+  {id:3,lat:50.45,lon:30.52,event_code:'036',title:'Kyiv — NATO ziyareti',description:'Genel Sekreter beklenmedik ziyaret',src:'AP NEWS',url:'https://apnews.com',timestamp:'2026-05-26T04:31:00Z'},
+  {id:4,lat:46.97,lon:31.99,event_code:'180',title:'Mikolaiv — hava alarmı',description:'İHA tehdidi, savunma aktive',src:'UA MOD',url:'https://liveuamap.com',timestamp:'2026-05-26T04:10:00Z'},
+  {id:5,lat:46.48,lon:30.72,event_code:'145',title:'Odesa — liman bölgesi',description:'Sivil tahliye protestosu',src:'REUTERS',url:'https://reuters.com',timestamp:'2026-05-26T05:22:00Z'},
+  {id:6,lat:49.84,lon:24.02,event_code:'111',title:'Lviv — batı ikmal hattı',description:'12+ araçlık konvoy bildirildi',src:'OSINT',url:'https://osintdefender.com',timestamp:'2026-05-26T03:55:00Z'},
+];
+
+async function httpFetch() {
+  try {
+    const r = await fetch(BACKEND + '/events');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return (await r.json()).map((e, i) => ({ id: e.id ?? i, ...e }));
+  } catch {
+    return FALLBACK;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   WEBSOCKET İSTEMCİSİ
+════════════════════════════════════════════════════════════ */
+let wsAlive       = false;
+let reconnectMs   = 2000;     // geri dönüş gecikmesi (üstel artış)
+let reconnectTimer = null;
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws    = new WebSocket(`${proto}//${location.hostname}:8000/ws`);
+
+  ws.onopen = () => {
+    wsAlive     = true;
+    reconnectMs = 2000;
+    setLiveStatus('ws');
+    clearTimeout(reconnectTimer);
+    console.info('[ELBIS] WebSocket bağlandı');
+  };
+
+  ws.onmessage = ({ data }) => {
+    let msg;
+    try { msg = JSON.parse(data); } catch { return; }
+
+    if (msg.type === 'init') {
+      // Sunucudan ilk tam yükleme
+      cache = msg.data;
+      render(cache);
+      document.getElementById('loading').classList.add('done');
+
+    } else if (msg.type === 'events_update' && msg.data?.length) {
+      // Yeni olaylar push edildi — cache'e ekle, tekrarlıları at
+      const newIds = new Set(msg.data.map(e => e.id));
+      cache = [...msg.data, ...cache.filter(e => !newIds.has(e.id))];
+      render(cache);
+      const src = msg.data[0]?.source_type || 'GDELT';
+      showToast(msg.data.length, src);
+    }
+  };
+
+  ws.onclose = () => {
+    wsAlive = false;
+    setLiveStatus('polling');
+    // Üstel geri dönüş: 2s → 4s → 8s → … → max 30s
+    reconnectMs = Math.min(reconnectMs * 2, 30000);
+    reconnectTimer = setTimeout(connectWS, reconnectMs);
+    console.warn('[ELBIS] WebSocket kapandı, %dms sonra yeniden denenecek', reconnectMs);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+/* ════════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════ */
+async function init() {
+  // WS bağlantısını başlat
+  connectWS();
+
+  // WS 3 saniye içinde init göndermezse HTTP fallback'e geç
+  setTimeout(async () => {
+    if (cache.length === 0) {
+      setLiveStatus('polling');
+      cache = await httpFetch();
+      render(cache);
+      document.getElementById('loading').classList.add('done');
+    }
+  }, 3000);
+
+  // WS kapalıyken her 5 dakikada bir HTTP'den güncelle
+  setInterval(async () => {
+    if (!wsAlive) {
+      cache = await httpFetch();
+      render(cache);
+    }
+  }, 5 * 60 * 1000);
+}
+
+// CSS animasyonu toast için
+const _toastStyle = document.createElement('style');
+_toastStyle.textContent = `@keyframes toastIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }`;
+document.head.appendChild(_toastStyle);
+
+init();
+</script>
+</body>
+</html>
