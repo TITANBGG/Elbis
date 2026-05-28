@@ -1,5 +1,11 @@
 # ELBIS
 
+
+
+https://github.com/user-attachments/assets/45bee311-e935-4be1-ad7d-f0b611e0517c
+
+
+
 Gerçek zamanlı olay izleme platformu. GDELT, ACLED ve Telegram kanallarından veri çekip PostgreSQL'de depolar; WebSocket üzerinden harita arayüzüne canlı olarak iletir.
 
 ## Mimari
